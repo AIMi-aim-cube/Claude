@@ -1,0 +1,23 @@
+# AIMi core
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pandas>=2.0
+numpy>=1.26
+requests>=2.31
+pydantic>=2.6
+python-multipart>=0.0.9
+
+# Market data (recommended)
+yfinance>=0.2.37
+
+# Optional — FinLlama local inference
+# transformers>=4.40
+# torch
+# accelerate
+
+# Optional — better RAG embeddings
+# sentence-transformers>=2.6
+
+# Optional — server-side voice
+# faster-whisper>=1.0
+# pyttsx3>=2.90

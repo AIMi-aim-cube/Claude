@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIMi — Live Intelligence Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy-deep:#0A1730; --navy:#10224A; --navy-card:#15295A;
+    --cyan:#2EB8E6; --cyan-soft:rgba(46,184,230,.12);
+    --orange:#F5A623; --green:#2BD98A; --red:#FF5C72;
+    --ink:#E9F0FB; --ink-dim:#8FA3C8; --line:rgba(143,163,200,.18);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--navy-deep);color:var(--ink);
+       font-family:'Space Grotesk',sans-serif;min-height:100vh}
+  .mono{font-family:'IBM Plex Mono',monospace}
+
+  /* ---------- top bar + live ticker tape ---------- */
+  header{display:flex;align-items:center;gap:14px;padding:14px 22px;
+         border-bottom:1px solid var(--line)}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:22px}
+  .logo .brain{width:30px;height:30px;border-radius:50%;
+        background:radial-gradient(circle at 35% 35%,var(--cyan),#1273a8);
+        box-shadow:0 0 18px rgba(46,184,230,.55)}
+  .logo span b{color:var(--cyan)}
+  .tagline{color:var(--ink-dim);font-size:13px}
+  .live-dot{margin-left:auto;display:flex;align-items:center;gap:8px;
+            font-size:12px;color:var(--ink-dim)}
+  .live-dot i{width:9px;height:9px;border-radius:50%;background:var(--green);
+              display:inline-block;animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+
+  .tape{display:flex;gap:34px;overflow:hidden;white-space:nowrap;
+        padding:9px 0;border-bottom:1px solid var(--line);
+        background:var(--navy)}
+  .tape-inner{display:flex;gap:34px;animation:scroll 28s linear infinite}
+  @keyframes scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  .tape .q{font-size:13px}
+  .up{color:var(--green)} .down{color:var(--red)}
+
+  /* ---------- layout ---------- */
+  main{display:grid;grid-template-columns:1.5fr 1fr;gap:18px;
+       padding:18px 22px;max-width:1480px;margin:0 auto}
+  @media(max-width:980px){main{grid-template-columns:1fr}}
+  .card{background:var(--navy-card);border:1px solid var(--line);
+        border-radius:var(--radius);padding:18px}
+  .card h2{font-size:13px;letter-spacing:.14em;text-transform:uppercase;
+           color:var(--cyan);margin-bottom:12px;font-weight:500}
+  .row{display:flex;gap:18px;flex-wrap:wrap}
+
+  /* signal pulse — signature element */
+  .pulse-wrap{display:flex;gap:22px;align-items:center}
+  .gauge{position:relative;width:150px;height:150px;flex:none}
+  .gauge svg{transform:rotate(-90deg)}
+  .gauge .val{position:absolute;inset:0;display:flex;flex-direction:column;
+              align-items:center;justify-content:center}
+  .gauge .val b{font-size:26px}
+  .gauge .val small{color:var(--ink-dim);font-size:11px}
+  .sig-direction{font-size:24px;font-weight:700}
+  .sig-rationale{color:var(--ink-dim);font-size:13px;margin-top:6px;line-height:1.5}
+  .chips{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .chip{font-size:11px;padding:4px 10px;border-radius:999px;
+        background:var(--cyan-soft);border:1px solid var(--line)}
+
+  canvas{max-height:280px}
+  .ctrl{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+  input,select,button{font-family:inherit;font-size:13px;border-radius:8px;
+        border:1px solid var(--line);background:var(--navy);color:var(--ink);
+        padding:8px 12px}
+  button{cursor:pointer;background:var(--cyan);color:#06243a;border:none;font-weight:600}
+  button.ghost{background:transparent;color:var(--cyan);border:1px solid var(--cyan)}
+  button:disabled{opacity:.5;cursor:default}
+
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{color:var(--ink-dim);text-align:left;font-weight:500;padding:6px 8px;
+     border-bottom:1px solid var(--line)}
+  td{padding:7px 8px;border-bottom:1px solid var(--line)}
+
+  /* news */
+  .news-item{padding:10px 0;border-bottom:1px solid var(--line)}
+  .news-item:last-child{border:none}
+  .news-item .t{font-size:13px;line-height:1.4}
+  .news-item .m{font-size:11px;color:var(--ink-dim);margin-top:3px}
+  .badge{font-size:10px;padding:2px 8px;border-radius:999px;font-weight:600}
+  .badge.positive{background:rgba(43,217,138,.15);color:var(--green)}
+  .badge.negative{background:rgba(255,92,114,.15);color:var(--red)}
+  .badge.neutral{background:rgba(143,163,200,.15);color:var(--ink-dim)}
+
+  /* chat */
+  #chat-log{height:300px;overflow-y:auto;display:flex;flex-direction:column;
+            gap:10px;padding:6px 2px;margin-bottom:10px}
+  .msg{max-width:88%;padding:10px 13px;border-radius:12px;font-size:13.5px;
+       line-height:1.5;white-space:pre-wrap}
+  .msg.user{align-self:flex-end;background:var(--cyan);color:#06243a;
+            border-bottom-right-radius:4px}
+  .msg.bot{align-self:flex-start;background:var(--navy);
+           border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg .src{display:block;margin-top:6px;font-size:10.5px;color:var(--ink-dim)}
+  #mic{width:42px;height:42px;border-radius:50%;flex:none;font-size:17px;
+       display:flex;align-items:center;justify-content:center}
+  #mic.rec{background:var(--red);color:#fff;animation:pulse 1.2s infinite}
+  .chat-input{display:flex;gap:8px}
+  .chat-input input{flex:1}
+
+  /* nudge banner (conversion funnel) */
+  #nudge{position:fixed;bottom:18px;right:18px;max-width:340px;z-index:50;
+         background:linear-gradient(135deg,var(--navy-card),#1b3a7a);
+         border:1px solid var(--cyan);border-radius:var(--radius);
+         padding:16px;display:none;box-shadow:0 12px 40px rgba(0,0,0,.5)}
+  #nudge h3{font-size:15px;margin-bottom:6px}
+  #nudge p{font-size:12.5px;color:var(--ink-dim);margin-bottom:10px;line-height:1.45}
+  #nudge .x{position:absolute;top:8px;right:12px;cursor:pointer;color:var(--ink-dim)}
+
+  .disclaimer{grid-column:1/-1;text-align:center;color:var(--ink-dim);
+              font-size:11px;padding:10px 0 22px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo"><div class="brain"></div><span>AIM<b>i</b></span></div>
+  <div class="tagline">Institutional-grade financial intelligence. For everyone.</div>
+  <div class="live-dot"><i></i><span id="conn">connecting…</span></div>
+</header>
+
+<div class="tape"><div class="tape-inner" id="tape"></div></div>
+
+<main>
+  <!-- LEFT: chart + signal pulse + backtest -->
+  <section style="display:flex;flex-direction:column;gap:18px">
+    <div class="card">
+      <h2>Live market — <span id="chart-ticker" class="mono">AAPL</span></h2>
+      <div class="ctrl">
+        <input id="ticker-in" class="mono" value="AAPL" size="7" maxlength="6">
+        <select id="period-in">
+          <option value="3mo">3M</option><option value="6mo" selected>6M</option>
+          <option value="1y">1Y</option><option value="2y">2Y</option>
+        </select>
+        <button onclick="loadChart()">Load</button>
+      </div>
+      <canvas id="price-chart"></canvas>
+    </div>
+
+    <div class="card">
+      <h2>AIMi signal pulse</h2>
+      <div class="pulse-wrap">
+        <div class="gauge">
+          <svg width="150" height="150">
+            <circle cx="75" cy="75" r="62" fill="none" stroke="var(--line)" stroke-width="10"/>
+            <circle id="gauge-arc" cx="75" cy="75" r="62" fill="none" stroke="var(--cyan)"
+                    stroke-width="10" stroke-linecap="round"
+                    stroke-dasharray="390" stroke-dashoffset="390"
+                    style="transition:stroke-dashoffset .8s,stroke .8s"/>
+          </svg>
+          <div class="val"><b id="gauge-pct" class="mono">—</b><small>conviction</small></div>
+        </div>
+        <div>
+          <div class="sig-direction" id="sig-dir">Awaiting signal…</div>
+          <div class="sig-rationale" id="sig-rat">Live composite of momentum, mean-reversion and breakout strategies blended with FinLlama news sentiment.</div>
+          <div class="chips" id="sig-chips"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Backtest lab</h2>
+      <div class="ctrl">
+        <select id="bt-strategy">
+          <option value="momentum">Momentum</option>
+          <option value="mean_reversion">Mean reversion</option>
+          <option value="breakout">Breakout</option>
+        </select>
+        <button class="ghost" onclick="runBacktest()">Run on current ticker</button>
+        <span id="bt-stats" class="mono" style="font-size:12px;color:var(--ink-dim);align-self:center"></span>
+      </div>
+      <canvas id="bt-chart"></canvas>
+    </div>
+  </section>
+
+  <!-- RIGHT: chat + portfolio + news -->
+  <section style="display:flex;flex-direction:column;gap:18px">
+    <div class="card">
+      <h2>Ask AIMi — voice &amp; text</h2>
+      <div id="chat-log">
+        <div class="msg bot">Hi, I'm AIMi 👋 Ask me about any ticker, market concept, or today's news — type or tap the mic.</div>
+      </div>
+      <div class="chat-input">
+        <button id="mic" class="ghost" title="Speak" onclick="toggleMic()">🎙</button>
+        <input id="chat-in" placeholder="e.g. What's the signal on NVDA?"
+               onkeydown="if(event.key==='Enter')sendChat()">
+        <button onclick="sendChat()">Send</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Portfolio builder</h2>
+      <div class="ctrl">
+        <input id="pf-tickers" class="mono" value="AAPL,MSFT,NVDA,SPY,TSLA" style="flex:1">
+        <select id="pf-profile">
+          <option value="conservative">Conservative</option>
+          <option value="balanced" selected>Balanced</option>
+          <option value="growth">Growth</option>
+          <option value="aggressive">Aggressive</option>
+        </select>
+        <button onclick="buildPortfolio()">Build</button>
+      </div>
+      <div class="row">
+        <div style="flex:1;min-width:180px"><canvas id="pf-chart" style="max-height:190px"></canvas></div>
+        <div style="flex:1;min-width:200px">
+          <table id="pf-risk"><tbody>
+            <tr><td colspan="2" style="color:var(--ink-dim)">Build a portfolio to see VaR, Sharpe, drawdown…</td></tr>
+          </tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Market news · FinLlama sentiment</h2>
+      <div id="news-list"><div class="news-item"><div class="t">Loading headlines…</div></div></div>
+    </div>
+  </section>
+
+  <div class="disclaimer">AIMi provides research and education, not personalised financial advice. Capital at risk. © 2026 AIM Cube — chataimi.ai</div>
+</main>
+
+<!-- conversion-funnel nudge -->
+<div id="nudge">
+  <span class="x" onclick="hideNudge()">✕</span>
+  <h3 id="nudge-h"></h3><p id="nudge-p"></p>
+  <button id="nudge-cta" onclick="nudgeAction()"></button>
+</div>
+
+<script>
+const API = location.origin;
+const uid = localStorage.aimi_uid || (localStorage.aimi_uid = crypto.randomUUID());
+let currentTicker = 'AAPL', priceChart, btChart, pfChart, lastNudgeType = null;
+
+/* ---------------- funnel tracking ---------------- */
+async function track(event, props={}){
+  try{
+    const r = await fetch(API+'/api/funnel/track',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:uid,event,props,
+        source:new URLSearchParams(location.search).get('utm_source')||'direct'})});
+    const s = await r.json();
+    if(s.nudge && s.nudge.type !== lastNudgeType) showNudge(s.nudge);
+  }catch(e){}
+}
+function showNudge(n){
+  lastNudgeType = n.type;
+  document.getElementById('nudge-h').textContent = n.headline;
+  document.getElementById('nudge-p').textContent = n.body;
+  document.getElementById('nudge-cta').textContent = n.cta;
+  document.getElementById('nudge').style.display = 'block';
+}
+function hideNudge(){document.getElementById('nudge').style.display='none'}
+function nudgeAction(){
+  const map = {signup:'email_submitted', trial:'trial_started',
+               upgrade:'pricing_viewed', enterprise:'enterprise_inquiry'};
+  track(map[lastNudgeType]||'pricing_viewed');
+  hideNudge();
+  addMsg('bot','✨ Thanks! In production this opens the '+lastNudgeType+' flow at chataimi.ai/pricing.');
+}
+track('page_view');
+
+/* ---------------- live websocket ---------------- */
+function connectWS(){
+  const ws = new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/live');
+  ws.onopen = ()=> document.getElementById('conn').textContent='live';
+  ws.onclose = ()=>{document.getElementById('conn').textContent='reconnecting…';
+                    setTimeout(connectWS,3000)};
+  ws.onmessage = e=>{
+    const m = JSON.parse(e.data);
+    if(m.type==='quotes') renderTape(m.data);
+    if(m.signal) renderSignal(m.signal);
+  };
+}
+function renderTape(quotes){
+  const html = quotes.map(q=>{
+    const cls = q.change_pct>=0?'up':'down', arrow = q.change_pct>=0?'▲':'▼';
+    return `<span class="q mono"><b>${q.ticker}</b> ${q.price}
+            <span class="${cls}">${arrow} ${q.change_pct}%</span></span>`;
+  }).join('');
+  document.getElementById('tape').innerHTML = html + html; // duplicate for seamless loop
+}
+function renderSignal(s){
+  document.getElementById('sig-dir').textContent = s.ticker+' · '+s.direction;
+  document.getElementById('sig-dir').style.color =
+    s.direction.includes('BUY')?'var(--green)':s.direction.includes('SELL')?'var(--red)':'var(--ink)';
+  document.getElementById('sig-rat').textContent = s.rationale;
+  document.getElementById('gauge-pct').textContent = Math.round(s.conviction*100)+'%';
+  const arc = document.getElementById('gauge-arc');
+  arc.style.strokeDashoffset = 390 - 390*s.conviction;
+  arc.style.stroke = s.direction.includes('SELL')?'var(--red)':
+                     s.direction.includes('BUY')?'var(--green)':'var(--cyan)';
+  const chips = Object.entries(s.technical.strategies||{})
+    .map(([k,v])=>`<span class="chip">${k}: ${v.signal}</span>`).join('')
+    + `<span class="chip">news: ${s.sentiment.label} (${s.sentiment.score>0?'+':''}${s.sentiment.score})</span>`;
+  document.getElementById('sig-chips').innerHTML = chips;
+  track('signal_viewed',{ticker:s.ticker});
+}
+connectWS();
+
+/* ---------------- price chart ---------------- */
+async function loadChart(){
+  currentTicker = document.getElementById('ticker-in').value.trim().toUpperCase()||'AAPL';
+  document.getElementById('chart-ticker').textContent = currentTicker;
+  const period = document.getElementById('period-in').value;
+  const d = await (await fetch(`${API}/api/history/${currentTicker}?period=${period}`)).json();
+  const labels = d.bars.map(b=>b.t), closes = d.bars.map(b=>b.c);
+  priceChart?.destroy();
+  priceChart = new Chart(document.getElementById('price-chart'),{
+    type:'line',
+    data:{labels,datasets:[{data:closes,borderColor:'#2EB8E6',borderWidth:2,
+      pointRadius:0,fill:true,tension:.25,
+      backgroundColor:ctx=>{const g=ctx.chart.ctx.createLinearGradient(0,0,0,260);
+        g.addColorStop(0,'rgba(46,184,230,.28)');g.addColorStop(1,'rgba(46,184,230,0)');return g}}]},
+    options:{plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#8FA3C8',maxTicksLimit:8},grid:{display:false}},
+              y:{ticks:{color:'#8FA3C8'},grid:{color:'rgba(143,163,200,.1)'}}}}
+  });
+}
+loadChart();
+
+/* ---------------- backtest ---------------- */
+async function runBacktest(){
+  track('backtest_run',{ticker:currentTicker});
+  document.getElementById('bt-stats').textContent='running…';
+  const body = {ticker:currentTicker,
+                strategy:document.getElementById('bt-strategy').value, period:'2y'};
+  const r = await (await fetch(API+'/api/backtest',{method:'POST',
+    headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})).json();
+  const labels = Object.keys(r.equity_curve), vals = Object.values(r.equity_curve);
+  btChart?.destroy();
+  btChart = new Chart(document.getElementById('bt-chart'),{
+    type:'line',
+    data:{labels,datasets:[{label:'Equity',data:vals,borderColor:'#F5A623',
+      borderWidth:2,pointRadius:0,tension:.2}]},
+    options:{plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#8FA3C8',maxTicksLimit:8},grid:{display:false}},
+              y:{ticks:{color:'#8FA3C8'},grid:{color:'rgba(143,163,200,.1)'}}}}
+  });
+  document.getElementById('bt-stats').textContent =
+    `${r.total_return_pct}% return · Sharpe ${r.risk.sharpe} · MaxDD ${(r.risk.max_drawdown*100).toFixed(1)}% · ${r.n_trades} trades · ${r.win_rate_pct}% wins`;
+}
+
+/* ---------------- portfolio ---------------- */
+async function buildPortfolio(){
+  track('portfolio_built');
+  const tickers = document.getElementById('pf-tickers').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const r = await (await fetch(API+'/api/portfolio/build',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({tickers,risk_profile:document.getElementById('pf-profile').value})})).json();
+  pfChart?.destroy();
+  pfChart = new Chart(document.getElementById('pf-chart'),{
+    type:'doughnut',
+    data:{labels:Object.keys(r.weights),
+      datasets:[{data:Object.values(r.weights),
+        backgroundColor:['#2EB8E6','#F5A623','#2BD98A','#9B7BFF','#FF5C72','#5CC8FF','#FFD166']}]},
+    options:{plugins:{legend:{position:'bottom',labels:{color:'#E9F0FB',font:{size:11}}}}}
+  });
+  const k = r.risk;
+  document.querySelector('#pf-risk tbody').innerHTML = `
+    <tr><td>Method</td><td class="mono">${r.method}</td></tr>
+    <tr><td>Ann. return</td><td class="mono up">${(k.ann_return*100).toFixed(1)}%</td></tr>
+    <tr><td>Volatility</td><td class="mono">${(k.ann_volatility*100).toFixed(1)}%</td></tr>
+    <tr><td>Sharpe</td><td class="mono">${k.sharpe}</td></tr>
+    <tr><td>VaR 95% (1d)</td><td class="mono down">${(k.var_95*100).toFixed(2)}%</td></tr>
+    <tr><td>CVaR 95%</td><td class="mono down">${(k.cvar_95*100).toFixed(2)}%</td></tr>
+    <tr><td>Max drawdown</td><td class="mono down">${(k.max_drawdown*100).toFixed(1)}%</td></tr>`;
+}
+
+/* ---------------- news ---------------- */
+async function loadNews(){
+  const d = await (await fetch(API+'/api/news?limit=8')).json();
+  document.getElementById('news-list').innerHTML = d.news.map(n=>`
+    <div class="news-item">
+      <div class="t">${n.link?`<a href="${n.link}" target="_blank" style="color:var(--ink);text-decoration:none">${n.title}</a>`:n.title}</div>
+      <div class="m"><span class="badge ${n.sentiment.label}">${n.sentiment.label} ${n.sentiment.score>0?'+':''}${n.sentiment.score}</span> · ${n.source}</div>
+    </div>`).join('');
+}
+loadNews(); setInterval(loadNews, 5*60*1000);
+
+/* ---------------- chat (text + voice RAG) ---------------- */
+const history = [];
+function addMsg(role,text,sources){
+  const log = document.getElementById('chat-log');
+  const div = document.createElement('div');
+  div.className = 'msg '+(role==='user'?'user':'bot');
+  div.textContent = text;
+  if(sources?.length){
+    const s = document.createElement('span'); s.className='src';
+    s.textContent = '📎 ' + sources.map(x=>x.source).slice(0,3).join(' · ');
+    div.appendChild(s);
+  }
+  log.appendChild(div); log.scrollTop = log.scrollHeight;
+}
+async function sendChat(textOverride){
+  const input = document.getElementById('chat-in');
+  const text = (textOverride ?? input.value).trim();
+  if(!text) return;
+  input.value=''; addMsg('user',text);
+  history.push({role:'user',content:text});
+  const r = await (await fetch(API+'/api/chat',{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({message:text,history,user_id:uid})})).json();
+  addMsg('bot',r.answer,r.sources);
+  history.push({role:'assistant',content:r.answer});
+  speak(r.answer);
+}
+
+/* voice: browser Web Speech API (STT) + SpeechSynthesis (TTS) */
+let recog=null, recording=false, voiceMode=false;
+function toggleMic(){
+  const SR = window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ addMsg('bot','Voice input needs Chrome/Edge — or POST audio to /api/voice for server-side Whisper.'); return; }
+  if(recording){ recog.stop(); return; }
+  recog = new SR(); recog.lang='en-US'; recog.interimResults=false;
+  recog.onstart = ()=>{recording=true; voiceMode=true;
+    document.getElementById('mic').classList.add('rec')};
+  recog.onend = ()=>{recording=false;
+    document.getElementById('mic').classList.remove('rec')};
+  recog.onresult = e=> sendChat(e.results[0][0].transcript);
+  recog.start();
+}
+function speak(text){
+  if(!voiceMode || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text.replace(/[*_#`]/g,'').slice(0,400));
+  u.rate = 1.05; speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+</script>
+</body>
+</html>
